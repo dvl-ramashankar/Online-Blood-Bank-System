@@ -425,15 +425,11 @@ func convertUnitsStringIntoInt(units string) (int, error) {
 	return unitInt, nil
 }
 
-func deductBloodUnitsFromBloodDetails(units string, location string, bloodDateStr string) (string, error) {
+func deductOrAddBloodUnitsFromBloodDetails(units, location, methodCall string, bloodDate time.Time) (string, error) {
 	unitInt, err := convertUnitsStringIntoInt(units)
 	if err != nil {
 		fmt.Println(err)
 		return "", nil
-	}
-	bloodDate, err := convertDate(bloodDateStr)
-	if err != nil {
-		return "", err
 	}
 	filter := bson.D{
 		{"$and",
@@ -453,14 +449,23 @@ func deductBloodUnitsFromBloodDetails(units string, location string, bloodDateSt
 	if finalData == nil {
 		return "", errors.New("Data not present in Blood details according to given location and desposited date")
 	}
-	unit := finalData[0].Units
-	if !(unit >= unitInt) {
-		return "", errors.New("Insufficient Blood!")
+	if methodCall == "Deduct" {
+		unit := finalData[0].Units
+		if !(unit >= unitInt) {
+			return "", errors.New("Insufficient Blood!")
+		}
+		addUnit := unit - unitInt
+		fmt.Println("Total Units:", addUnit)
+		CollectionBloodDetails.FindOneAndUpdate(ctx, filter, bson.D{{"$set", bson.D{{"units", addUnit}}}})
+		return "Blood units Deduct Successfully", nil
+	} else if methodCall == "Add" {
+		unit := finalData[0].Units
+		addUnit := unit + unitInt
+		fmt.Println("Total Units:", addUnit)
+		CollectionBloodDetails.FindOneAndUpdate(ctx, filter, bson.D{{"$set", bson.D{{"units", addUnit}}}})
+		return "Blood Units Added Successfully", nil
 	}
-	addUnit := unit - unitInt
-	fmt.Println("Total Units:", addUnit)
-	CollectionBloodDetails.FindOneAndUpdate(ctx, filter, bson.D{{"$set", bson.D{{"units", addUnit}}}})
-	return "Deduct Successfully", nil
+	return "", nil
 }
 
 //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
@@ -474,7 +479,13 @@ func (e *Connection) ApplyBloodPatientDetails(reqBody entity.PatientDetailsReque
 		log.Println(err)
 		return "", err
 	}
-	deduct, err := deductBloodUnitsFromBloodDetails(reqBody.ApplyUnits, reqBody.Location, reqBody.BloodDate)
+	bloodDate, err := convertDate(reqBody.BloodDate)
+	if err != nil {
+		log.Println(err)
+		return "", err
+	}
+
+	deduct, err := deductOrAddBloodUnitsFromBloodDetails(reqBody.ApplyUnits, reqBody.Location, "Deduct", bloodDate)
 	if err != nil {
 		return "", err
 	}
@@ -545,12 +556,30 @@ func (e *Connection) DeletePendingBloodPatientDetails(idStr string) (string, err
 	filter := bson.D{primitive.E{Key: "_id", Value: id}}
 	update := bson.D{{"$set", bson.D{primitive.E{Key: "active", Value: false}}}}
 	CollectionPatientDetails.FindOneAndUpdate(ctx, filter, update)
+	data, err := CollectionPatientDetails.Find(ctx, filter)
+	if err != nil {
+		return "", err
+	}
+	dataConv, err := convertDbResultIntoPatientStruct(data)
+	if err != nil {
+		return "", err
+	}
+	str, err := deductOrAddBloodUnitsFromBloodDetails(dataConv[0].ApplyUnits, dataConv[0].Location, "Add", dataConv[0].BloodDate)
+	if err != nil {
+		return "", err
+	}
+	fmt.Println(str)
 	return "Documents Deactivated Successfully", err
 }
 
 func SetValueInPatientModel(req entity.PatientDetailsRequest) (entity.PatientDetails, error) {
 	var data entity.PatientDetails
 	dob, err := convertDate(req.DOB)
+	if err != nil {
+		log.Println(err)
+		return data, err
+	}
+	bloodDate, err := convertDate(req.BloodDate)
 	if err != nil {
 		log.Println(err)
 		return data, err
@@ -565,6 +594,7 @@ func SetValueInPatientModel(req entity.PatientDetailsRequest) (entity.PatientDet
 	data.CreatedDate = time.Now()
 	data.ApplyUnits = req.ApplyUnits
 	data.ApplyDate = time.Now()
+	data.BloodDate = bloodDate
 	return data, nil
 }
 

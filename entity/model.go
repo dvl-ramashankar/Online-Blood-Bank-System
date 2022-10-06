@@ -53,6 +53,7 @@ type PatientDetails struct {
 	ApplyUnits  string             `bson:"apply_units,omitempty" json:"apply_units,omitempty"`
 	ApplyDate   time.Time          `bson:"apply_date,omitempty" json:"apply_date,omitempty"`
 	GivenDate   time.Time          `bson:"given_date,omitempty" json:"given_date,omitempty"`
+	BloodDate   time.Time          `bson:"blood_date,omitempty" json:"blood_date,omitempty"`
 }
 
 type BloodDetailsRequest struct {
