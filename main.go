@@ -1,0 +1,295 @@
+package main
+
+import (
+	"bloodSystem/entity"
+	"bloodSystem/service"
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"strings"
+)
+
+var ser = service.Connection{}
+
+func init() {
+	ser.Server = "mongodb://localhost:27017"
+	ser.Database = "BloodSystem"
+	ser.Collection1 = "UserDetails"
+	ser.Collection2 = "DonorDetails"
+	ser.Collection3 = "BloodDetails"
+	ser.Collection4 = "PatientDetails"
+
+	ser.Connect()
+}
+
+func saveUserDetails(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	if r.Method != "POST" {
+		respondWithError(w, http.StatusBadRequest, "Invalid Method")
+		return
+	}
+
+	var dataBody entity.UserDetailsRequest
+	if err := json.NewDecoder(r.Body).Decode(&dataBody); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid Request")
+		return
+	}
+
+	if result, err := ser.SaveUserDetails(dataBody); err != nil {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
+	} else {
+		respondWithJson(w, http.StatusBadRequest, result)
+	}
+}
+
+func searchUsersDetailsById(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	if r.Method != "GET" {
+		respondWithError(w, http.StatusBadRequest, "Invalid Method")
+		return
+	}
+
+	segment := strings.Split(r.URL.Path, "/")
+	id := segment[len(segment)-1]
+	if id == "" {
+		respondWithError(w, http.StatusBadRequest, "Please provide Id for Search")
+	}
+
+	if result, err := ser.SearchUsersDetailsById(id); err != nil {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
+	} else {
+		respondWithJson(w, http.StatusBadRequest, result)
+	}
+}
+
+func updateUserDetailsById(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	if r.Method != "PUT" {
+		respondWithError(w, http.StatusBadRequest, "Invalid Method")
+		return
+	}
+	path := r.URL.Path
+	segments := strings.Split(path, "/")
+	id := segments[len(segments)-1]
+
+	var dataBody entity.UserDetailsRequest
+	if err := json.NewDecoder(r.Body).Decode(&dataBody); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid Request")
+		return
+	}
+
+	if result, err := ser.UpdateUserDetailsById(dataBody, id); err != nil {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
+	} else {
+		respondWithJson(w, http.StatusBadRequest, result)
+	}
+}
+
+func deleteUserDetailsById(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	if r.Method != "DELETE" {
+		respondWithError(w, http.StatusBadRequest, "Invalid Method")
+		return
+	}
+	path := r.URL.Path
+	segments := strings.Split(path, "/")
+	id := segments[len(segments)-1]
+
+	if result, err := ser.DeleteUserDetailsById(id); err != nil {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
+	} else {
+		respondWithJson(w, http.StatusBadRequest, result)
+	}
+}
+
+func saveDonorDetails(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	if r.Method != "POST" {
+		respondWithError(w, http.StatusBadRequest, "Invalid Method")
+		return
+	}
+
+	var dataBody entity.DonorDetailsRequest
+	if err := json.NewDecoder(r.Body).Decode(&dataBody); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid Request")
+		return
+	}
+
+	if result, err := ser.SaveDonorDetails(dataBody); err != nil {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
+	} else {
+		respondWithJson(w, http.StatusBadRequest, result)
+	}
+}
+
+func searchDonorDetailsById(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	if r.Method != "GET" {
+		respondWithError(w, http.StatusBadRequest, "Invalid Method")
+		return
+	}
+
+	segment := strings.Split(r.URL.Path, "/")
+	id := segment[len(segment)-1]
+	if id == "" {
+		respondWithError(w, http.StatusBadRequest, "Please provide Id for Search")
+	}
+
+	if result, err := ser.SearchDonorDetailsById(id); err != nil {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
+	} else {
+		respondWithJson(w, http.StatusBadRequest, result)
+	}
+}
+
+func updateDonorDetailsById(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	if r.Method != "PUT" {
+		respondWithError(w, http.StatusBadRequest, "Invalid Method")
+		return
+	}
+	path := r.URL.Path
+	segments := strings.Split(path, "/")
+	id := segments[len(segments)-1]
+
+	var dataBody entity.DonorDetailsRequest
+	if err := json.NewDecoder(r.Body).Decode(&dataBody); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid Request")
+		return
+	}
+
+	if result, err := ser.UpdateDonorDetailsById(dataBody, id); err != nil {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
+	} else {
+		respondWithJson(w, http.StatusBadRequest, result)
+	}
+}
+
+func deleteDonorDetailsById(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	if r.Method != "DELETE" {
+		respondWithError(w, http.StatusBadRequest, "Invalid Method")
+		return
+	}
+	path := r.URL.Path
+	segments := strings.Split(path, "/")
+	id := segments[len(segments)-1]
+
+	if result, err := ser.DeleteDonorDetailsById(id); err != nil {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
+	} else {
+		respondWithJson(w, http.StatusBadRequest, result)
+	}
+}
+
+func applyBloodPatientDetails(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	if r.Method != "POST" {
+		respondWithError(w, http.StatusBadRequest, "Invalid Method")
+		return
+	}
+
+	var dataBody entity.PatientDetailsRequest
+	if err := json.NewDecoder(r.Body).Decode(&dataBody); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid Request")
+		return
+	}
+
+	if result, err := ser.ApplyBloodPatientDetails(dataBody); err != nil {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
+	} else {
+		respondWithJson(w, http.StatusBadRequest, result)
+	}
+}
+
+func givenBloodPatientDetailsById(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	if r.Method != "GET" {
+		respondWithError(w, http.StatusBadRequest, "Invalid Method")
+		return
+	}
+
+	segment := strings.Split(r.URL.Path, "/")
+	id := segment[len(segment)-1]
+	if id == "" {
+		respondWithError(w, http.StatusBadRequest, "Please provide Id for Search")
+	}
+
+	if result, err := ser.GivenBloodPatientDetailsById(id); err != nil {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
+	} else {
+		respondWithJson(w, http.StatusBadRequest, result)
+	}
+}
+
+func searchAllPendingBloodPatientDetails(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	if r.Method != "GET" {
+		respondWithError(w, http.StatusBadRequest, "Invalid Method")
+		return
+	}
+
+	if result, err := ser.SearchAllPendingBloodPatientDetails(); err != nil {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
+	} else {
+		respondWithJson(w, http.StatusBadRequest, result)
+	}
+}
+
+func deletePendingBloodPatientDetails(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	if r.Method != "DELETE" {
+		respondWithError(w, http.StatusBadRequest, "Invalid Method")
+		return
+	}
+	path := r.URL.Path
+	segments := strings.Split(path, "/")
+	id := segments[len(segments)-1]
+
+	if result, err := ser.DeletePendingBloodPatientDetails(id); err != nil {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
+	} else {
+		respondWithJson(w, http.StatusBadRequest, result)
+	}
+}
+
+func respondWithError(w http.ResponseWriter, code int, msg string) {
+	respondWithJson(w, code, map[string]string{"error": msg})
+}
+
+func respondWithJson(w http.ResponseWriter, code int, payload interface{}) {
+	response, _ := json.Marshal(payload)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	w.Write(response)
+}
+
+func main() {
+	http.HandleFunc("/save-user-details", saveUserDetails)
+	http.HandleFunc("/search-user-details-id/", searchUsersDetailsById)
+	http.HandleFunc("/update-user-details-id/", updateUserDetailsById)
+	http.HandleFunc("/delete-user-details-id/", deleteUserDetailsById)
+	http.HandleFunc("/save-donor-details", saveDonorDetails)
+	http.HandleFunc("/search-donor-details-id/", searchDonorDetailsById)
+	http.HandleFunc("/update-donor-details-id/", updateDonorDetailsById)
+	http.HandleFunc("/delete-donor-details-id/", deleteDonorDetailsById)
+	http.HandleFunc("/apply-blood-patient-details", applyBloodPatientDetails)
+	http.HandleFunc("/given-blood-patient-details-id/", givenBloodPatientDetailsById)
+	http.HandleFunc("/search-all-pending-patient-details/", searchAllPendingBloodPatientDetails)
+	http.HandleFunc("/delete-pending-patient-request/", deletePendingBloodPatientDetails)
+	log.Println("Server started at 8080")
+	http.ListenAndServe(":8080", nil)
+}
