@@ -50,7 +50,13 @@ func (e *Connection) Connect() {
 
 // ===================================userDetails============================================
 func (e *Connection) SaveUserDetails(reqBody entity.UserDetailsRequest) (string, error) {
-	fmt.Println("save Method:", reqBody)
+	bool, err := validateByNameAndDob(reqBody)
+	if err != nil {
+		return "", err
+	}
+	if !bool {
+		return "", errors.New("User already present")
+	}
 	saveData, err := SetValueInUserModel(reqBody)
 	if err != nil {
 		log.Println(err)
@@ -61,8 +67,8 @@ func (e *Connection) SaveUserDetails(reqBody entity.UserDetailsRequest) (string,
 		log.Println(err)
 		return "", errors.New("Unable to store data")
 	}
-	fmt.Println(data)
-	return "User Saved Successfully", nil
+	d := data.InsertedID
+	return "User Saved Successfully : " + fmt.Sprintf("%v", d), nil
 }
 
 func (e *Connection) SearchUsersDetailsById(idStr string) ([]*entity.UserDetails, error) {
@@ -72,6 +78,8 @@ func (e *Connection) SearchUsersDetailsById(idStr string) ([]*entity.UserDetails
 	if err != nil {
 		return finalData, err
 	}
+	rk := id.String()
+	fmt.Println(rk)
 	filter := bson.D{
 		{"$and",
 			bson.A{
@@ -192,6 +200,28 @@ func SetValueInUserModel(req entity.UserDetailsRequest) (entity.UserDetails, err
 	data.Location = req.Location
 	data.CreatedDate = time.Now()
 	return data, nil
+}
+
+func validateByNameAndDob(reqbody entity.UserDetailsRequest) (bool, error) {
+	dobStr := reqbody.DOB
+	dob, err := convertDate(dobStr)
+	if err != nil {
+		return false, err
+	}
+	fmt.Println(dob)
+	var result []*entity.UserDetails
+	data, err := CollectionUserDetails.Find(ctx, bson.D{{"name", reqbody.Name}, {"dob", dob}, {"active", true}})
+	if err != nil {
+		return false, err
+	}
+	result, err = convertDbResultIntoUserStruct(data)
+	if err != nil {
+		return false, err
+	}
+	if len(result) == 0 {
+		return true, err
+	}
+	return false, err
 }
 
 // XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
@@ -347,6 +377,36 @@ func SetValueInModel(req entity.DonorDetailsRequest) (entity.DonorDetails, error
 //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 //=======================================Blood Details==========================================
 
+func (e *Connection) SearchFilterBloodDetails(search entity.BloodDetailsRequest) ([]*entity.BloodDetails, error) {
+	var searchData []*entity.BloodDetails
+
+	filter := bson.D{}
+
+	if search.BloodGroup != "" {
+		filter = append(filter, primitive.E{Key: "blood_group", Value: bson.M{"$regex": search.BloodGroup}})
+	}
+	if search.Location != "" {
+		filter = append(filter, primitive.E{Key: "location", Value: bson.M{"$regex": search.Location}})
+	}
+	if search.DepositDate != "" {
+		depositDate, err := convertDate(search.DepositDate)
+		if err != nil {
+			return searchData, err
+		}
+		filter = append(filter, primitive.E{Key: "deposit-date", Value: bson.M{"$regex": depositDate}})
+	}
+	result, err := CollectionBloodDetails.Find(ctx, filter)
+	if err != nil {
+		return searchData, err
+	}
+	data, err := convertDbResultIntoBloodStruct(result)
+	if err != nil {
+		return searchData, err
+	}
+
+	return data, nil
+}
+
 func saveBloodQuantityInBloodDetails(reqBody entity.DonorDetailsRequest) (string, error) {
 	var finalData []*entity.BloodDetails
 	depositDate, err := convertDate(reqBody.DepositDate)
@@ -425,7 +485,7 @@ func convertUnitsStringIntoInt(units string) (int, error) {
 	return unitInt, nil
 }
 
-func deductOrAddBloodUnitsFromBloodDetails(units, location, methodCall string, bloodDate time.Time) (string, error) {
+func deductOrAddBloodUnitsFromBloodDetails(bloodGroup, units, location, methodCall string, bloodDate time.Time) (string, error) {
 	unitInt, err := convertUnitsStringIntoInt(units)
 	if err != nil {
 		fmt.Println(err)
@@ -434,6 +494,7 @@ func deductOrAddBloodUnitsFromBloodDetails(units, location, methodCall string, b
 	filter := bson.D{
 		{"$and",
 			bson.A{
+				bson.D{{"blood_group", bloodGroup}},
 				bson.D{{"location", location}},
 				bson.D{{"deposit_date", bloodDate}},
 			},
@@ -485,7 +546,7 @@ func (e *Connection) ApplyBloodPatientDetails(reqBody entity.PatientDetailsReque
 		return "", err
 	}
 
-	deduct, err := deductOrAddBloodUnitsFromBloodDetails(reqBody.ApplyUnits, reqBody.Location, "Deduct", bloodDate)
+	deduct, err := deductOrAddBloodUnitsFromBloodDetails(reqBody.BloodGroup, reqBody.ApplyUnits, reqBody.Location, "Deduct", bloodDate)
 	if err != nil {
 		return "", err
 	}
@@ -550,6 +611,7 @@ func (e *Connection) GivenBloodPatientDetailsById(idStr string) (bson.M, error) 
 
 func (e *Connection) DeletePendingBloodPatientDetails(idStr string) (string, error) {
 	id, err := primitive.ObjectIDFromHex(idStr)
+
 	if err != nil {
 		return "", err
 	}
@@ -564,7 +626,7 @@ func (e *Connection) DeletePendingBloodPatientDetails(idStr string) (string, err
 	if err != nil {
 		return "", err
 	}
-	str, err := deductOrAddBloodUnitsFromBloodDetails(dataConv[0].ApplyUnits, dataConv[0].Location, "Add", dataConv[0].BloodDate)
+	str, err := deductOrAddBloodUnitsFromBloodDetails(dataConv[0].BloodGroup, dataConv[0].ApplyUnits, dataConv[0].Location, "Add", dataConv[0].BloodDate)
 	if err != nil {
 		return "", err
 	}

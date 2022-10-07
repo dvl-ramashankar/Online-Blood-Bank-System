@@ -266,6 +266,26 @@ func deletePendingBloodPatientDetails(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func searchFilterBloodDetails(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	if r.Method != "POST" {
+		respondWithError(w, http.StatusBadRequest, "Invalid Method")
+		return
+	}
+
+	var bloodDetailsRequest entity.BloodDetailsRequest
+	if err := json.NewDecoder(r.Body).Decode(&bloodDetailsRequest); err != nil {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
+	}
+
+	if result, err := ser.SearchFilterBloodDetails(bloodDetailsRequest); err != nil {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
+	} else {
+		respondWithJson(w, http.StatusBadRequest, result)
+	}
+}
+
 func respondWithError(w http.ResponseWriter, code int, msg string) {
 	respondWithJson(w, code, map[string]string{"error": msg})
 }
@@ -290,6 +310,7 @@ func main() {
 	http.HandleFunc("/given-blood-patient-details-id/", givenBloodPatientDetailsById)
 	http.HandleFunc("/search-all-pending-patient-details/", searchAllPendingBloodPatientDetails)
 	http.HandleFunc("/delete-pending-patient-request/", deletePendingBloodPatientDetails)
+	http.HandleFunc("/search-filter-blood-details/", searchFilterBloodDetails)
 	log.Println("Server started at 8080")
 	http.ListenAndServe(":8080", nil)
 }
