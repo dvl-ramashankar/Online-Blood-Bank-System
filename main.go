@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bloodSystem/auth"
 	"bloodSystem/entity"
 	"bloodSystem/service"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -19,6 +21,7 @@ func init() {
 	ser.Collection2 = "DonorDetails"
 	ser.Collection3 = "BloodDetails"
 	ser.Collection4 = "PatientDetails"
+	ser.Collection5 = "LoginDetails"
 
 	ser.Connect()
 }
@@ -30,10 +33,20 @@ func saveUserDetails(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusBadRequest, "Invalid Method")
 		return
 	}
-
+	token := r.Header.Get("tokenid")
+	err := validateToken(token)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
+		return
+	}
 	var dataBody entity.UserDetailsRequest
 	if err := json.NewDecoder(r.Body).Decode(&dataBody); err != nil {
 		respondWithError(w, http.StatusBadRequest, "Invalid Request")
+		return
+	}
+
+	if dataBody.MailId == "" || dataBody.Password == "" {
+		respondWithError(w, http.StatusBadRequest, "Please enter mailId or Password")
 		return
 	}
 
@@ -72,6 +85,12 @@ func updateUserDetailsById(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusBadRequest, "Invalid Method")
 		return
 	}
+	token := r.Header.Get("tokenid")
+	err := validateToken(token)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
+		return
+	}
 	path := r.URL.Path
 	segments := strings.Split(path, "/")
 	id := segments[len(segments)-1]
@@ -96,6 +115,13 @@ func deleteUserDetailsById(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusBadRequest, "Invalid Method")
 		return
 	}
+
+	token := r.Header.Get("tokenid")
+	err := validateToken(token)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
+		return
+	}
 	path := r.URL.Path
 	segments := strings.Split(path, "/")
 	id := segments[len(segments)-1]
@@ -114,10 +140,20 @@ func saveDonorDetails(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusBadRequest, "Invalid Method")
 		return
 	}
-
+	token := r.Header.Get("tokenid")
+	err := validateToken(token)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
+		return
+	}
 	var dataBody entity.DonorDetailsRequest
 	if err := json.NewDecoder(r.Body).Decode(&dataBody); err != nil {
 		respondWithError(w, http.StatusBadRequest, "Invalid Request")
+		return
+	}
+
+	if dataBody.MailId == "" || dataBody.Password == "" {
+		respondWithError(w, http.StatusBadRequest, "Please enter mailId or Password")
 		return
 	}
 
@@ -156,6 +192,12 @@ func updateDonorDetailsById(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusBadRequest, "Invalid Method")
 		return
 	}
+	token := r.Header.Get("tokenid")
+	err := validateToken(token)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
+		return
+	}
 	path := r.URL.Path
 	segments := strings.Split(path, "/")
 	id := segments[len(segments)-1]
@@ -180,6 +222,12 @@ func deleteDonorDetailsById(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusBadRequest, "Invalid Method")
 		return
 	}
+	token := r.Header.Get("tokenid")
+	err := validateToken(token)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
+		return
+	}
 	path := r.URL.Path
 	segments := strings.Split(path, "/")
 	id := segments[len(segments)-1]
@@ -198,10 +246,20 @@ func applyBloodPatientDetails(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusBadRequest, "Invalid Method")
 		return
 	}
-
+	token := r.Header.Get("tokenid")
+	err := validateToken(token)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
+		return
+	}
 	var dataBody entity.PatientDetailsRequest
 	if err := json.NewDecoder(r.Body).Decode(&dataBody); err != nil {
 		respondWithError(w, http.StatusBadRequest, "Invalid Request")
+		return
+	}
+
+	if dataBody.MailId == "" || dataBody.Password == "" {
+		respondWithError(w, http.StatusBadRequest, "Please enter mailId or Password")
 		return
 	}
 
@@ -217,6 +275,12 @@ func givenBloodPatientDetailsById(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != "GET" {
 		respondWithError(w, http.StatusBadRequest, "Invalid Method")
+		return
+	}
+	token := r.Header.Get("tokenid")
+	err := validateToken(token)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
 		return
 	}
 
@@ -255,6 +319,12 @@ func deletePendingBloodPatientDetails(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusBadRequest, "Invalid Method")
 		return
 	}
+	token := r.Header.Get("tokenid")
+	err := validateToken(token)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
+		return
+	}
 	path := r.URL.Path
 	segments := strings.Split(path, "/")
 	id := segments[len(segments)-1]
@@ -286,6 +356,26 @@ func searchFilterBloodDetails(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func generateToken(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	if r.Method != "POST" {
+		respondWithError(w, http.StatusBadRequest, "Invalid Method")
+		return
+	}
+
+	var loginDetails entity.LoginDetails
+	if err := json.NewDecoder(r.Body).Decode(&loginDetails); err != nil {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
+	}
+
+	if result, err := ser.GenerateToken(loginDetails); err != nil {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
+	} else {
+		respondWithJson(w, http.StatusBadRequest, result)
+	}
+}
+
 func respondWithError(w http.ResponseWriter, code int, msg string) {
 	respondWithJson(w, code, map[string]string{"error": msg})
 }
@@ -297,7 +387,19 @@ func respondWithJson(w http.ResponseWriter, code int, payload interface{}) {
 	w.Write(response)
 }
 
+func validateToken(token string) error {
+	if token == "" {
+		return errors.New("Please Enter Token")
+	}
+	err := auth.ValidateToken(token)
+	if err != nil {
+		return errors.New("Either Token Is Invalid Or Expired")
+	}
+	return err
+}
+
 func main() {
+	http.HandleFunc("/generate-token", generateToken)
 	http.HandleFunc("/save-user-details", saveUserDetails)
 	http.HandleFunc("/search-user-details-id/", searchUsersDetailsById)
 	http.HandleFunc("/update-user-details-id/", updateUserDetailsById)

@@ -26,6 +26,8 @@ type DonorDetails struct {
 	Location    string             `bson:"location,omitempty" json:"location,omitempty"`
 	AdharCard   string             `bson:"adhar_card,omitempty" json:"adhar_card,omitempty"`
 	Active      bool               `bson:"active,omitempty" json:"active,omitempty"`
+	MailId      string             `bson:"mail_id,omitempty" json:"mail_id,omitempty"`
+	Password    string             `bson:"password,omitempty" json:"password,omitempty"`
 }
 
 type UserDetails struct {
@@ -38,6 +40,8 @@ type UserDetails struct {
 	CreatedDate time.Time          `bson:"created_date,omitempty" json:"created_date,omitempty"`
 	Location    string             `bson:"location,omitempty" json:"location,omitempty"`
 	Active      bool               `bson:"active,omitempty" json:"active,omitempty"`
+	MailId      string             `bson:"mail_id,omitempty" json:"mail_id,omitempty"`
+	Password    string             `bson:"password,omitempty" json:"password,omitempty"`
 }
 
 type PatientDetails struct {
@@ -54,6 +58,15 @@ type PatientDetails struct {
 	ApplyDate   time.Time          `bson:"apply_date,omitempty" json:"apply_date,omitempty"`
 	GivenDate   time.Time          `bson:"given_date,omitempty" json:"given_date,omitempty"`
 	BloodDate   time.Time          `bson:"blood_date,omitempty" json:"blood_date,omitempty"`
+	MailId      string             `bson:"mail_id,omitempty" json:"mail_id,omitempty"`
+	Password    string             `bson:"password,omitempty" json:"password,omitempty"`
+}
+
+type LoginDetails struct {
+	Id       primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
+	MailId   string             `bson:"mail_id,omitempty" json:"mail_id,omitempty"`
+	Password string             `bson:"password,omitempty" json:"password,omitempty"`
+	Active   bool               `bson:"active,omitempty" json:"active,omitempty"`
 }
 
 type BloodDetailsRequest struct {
@@ -72,6 +85,8 @@ type DonorDetailsRequest struct {
 	DepositDate string `bson:"deposit_date,omitempty" json:"deposit_date,omitempty"`
 	Location    string `bson:"location,omitempty" json:"location,omitempty"`
 	AdharCard   string `bson:"adhar_card,omitempty" json:"adhar_card,omitempty"`
+	MailId      string `bson:"mail_id,omitempty" json:"mail_id,omitempty"`
+	Password    string `bson:"password,omitempty" json:"password,omitempty"`
 }
 
 type UserDetailsRequest struct {
@@ -81,6 +96,8 @@ type UserDetailsRequest struct {
 	BloodGroup string `bson:"blood_group,omitempty" json:"blood_group,omitempty"`
 	Location   string `bson:"location,omitempty" json:"location,omitempty"`
 	AdharCard  string `bson:"adhar_card,omitempty" json:"adhar_card,omitempty"`
+	MailId     string `bson:"mail_id,omitempty" json:"mail_id,omitempty"`
+	Password   string `bson:"password,omitempty" json:"password,omitempty"`
 }
 
 type PatientDetailsRequest struct {
@@ -92,4 +109,6 @@ type PatientDetailsRequest struct {
 	Location   string `bson:"location,omitempty" json:"location,omitempty"`
 	ApplyUnits string `bson:"apply_units,omitempty" json:"apply_units,omitempty"`
 	BloodDate  string `bson:"blood_date,omitempty" json:"blood_date,omitempty"`
+	MailId     string `bson:"mail_id,omitempty" json:"mail_id,omitempty"`
+	Password   string `bson:"password,omitempty" json:"password,omitempty"`
 }

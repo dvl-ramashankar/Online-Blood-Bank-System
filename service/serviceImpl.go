@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bloodSystem/auth"
 	"bloodSystem/entity"
 	"context"
 	"errors"
@@ -23,12 +24,14 @@ type Connection struct {
 	Collection2 string
 	Collection3 string
 	Collection4 string
+	Collection5 string
 }
 
 var CollectionUserDetails *mongo.Collection
 var CollectionDonorDetails *mongo.Collection
 var CollectionBloodDetails *mongo.Collection
 var CollectionPatientDetails *mongo.Collection
+var CollectionLoginDetails *mongo.Collection
 var ctx = context.TODO()
 
 func (e *Connection) Connect() {
@@ -46,6 +49,7 @@ func (e *Connection) Connect() {
 	CollectionDonorDetails = client.Database(e.Database).Collection(e.Collection2)
 	CollectionBloodDetails = client.Database(e.Database).Collection(e.Collection3)
 	CollectionPatientDetails = client.Database(e.Database).Collection(e.Collection4)
+	CollectionLoginDetails = client.Database(e.Database).Collection(e.Collection5)
 }
 
 // ===================================userDetails============================================
@@ -57,6 +61,7 @@ func (e *Connection) SaveUserDetails(reqBody entity.UserDetailsRequest) (string,
 	if !bool {
 		return "", errors.New("User already present")
 	}
+	saveIntoLoginTable(reqBody.MailId, reqBody.Password)
 	saveData, err := SetValueInUserModel(reqBody)
 	if err != nil {
 		log.Println(err)
@@ -199,6 +204,8 @@ func SetValueInUserModel(req entity.UserDetailsRequest) (entity.UserDetails, err
 	data.Active = true
 	data.Location = req.Location
 	data.CreatedDate = time.Now()
+	data.MailId = req.MailId
+	data.Password = req.Password
 	return data, nil
 }
 
@@ -227,6 +234,7 @@ func validateByNameAndDob(reqbody entity.UserDetailsRequest) (bool, error) {
 // XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 // ==========================================Donor detail======================================
 func (e *Connection) SaveDonorDetails(reqBody entity.DonorDetailsRequest) (string, error) {
+	saveIntoLoginTable(reqBody.MailId, reqBody.Password)
 	saveData, err := SetValueInModel(reqBody)
 	if err != nil {
 		return "", errors.New("Unable to parse date")
@@ -534,7 +542,7 @@ func deductOrAddBloodUnitsFromBloodDetails(bloodGroup, units, location, methodCa
 //==========================================Patient Details=====================================
 
 func (e *Connection) ApplyBloodPatientDetails(reqBody entity.PatientDetailsRequest) (string, error) {
-
+	saveIntoLoginTable(reqBody.MailId, reqBody.Password)
 	saveData, err := SetValueInPatientModel(reqBody)
 	if err != nil {
 		log.Println(err)
@@ -674,3 +682,66 @@ func convertDbResultIntoPatientStruct(fetchDataCursor *mongo.Cursor) ([]*entity.
 }
 
 //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+//===========================Login Details======================================
+
+func saveIntoLoginTable(mailId, password string) {
+	data, err := CollectionLoginDetails.Find(ctx, bson.D{primitive.E{Key: "mail_id", Value: mailId}})
+	if err != nil {
+		log.Println("Unable to fetch data from login details :", err)
+	}
+	fmt.Println(data)
+	finalData, err := convertDbResultIntoLoginStruct(data)
+	if err != nil {
+		log.Println("Error while converting into login details struct :", err)
+	}
+	if finalData == nil {
+		var request entity.LoginDetails
+		request.MailId = mailId
+		request.Password = password
+		request.Active = true
+		saveData, err := CollectionLoginDetails.InsertOne(ctx, request)
+		if err != nil {
+			log.Println("Error while inserting into login details :", err)
+		}
+		fmt.Println("Saved Into Login Details :", saveData.InsertedID)
+	} else {
+		log.Println("User Already Exists!")
+	}
+}
+
+func convertDbResultIntoLoginStruct(fetchDataCursor *mongo.Cursor) ([]*entity.LoginDetails, error) {
+	var data []*entity.LoginDetails
+	for fetchDataCursor.Next(ctx) {
+		var db entity.LoginDetails
+		err := fetchDataCursor.Decode(&db)
+		if err != nil {
+			return data, err
+		}
+		data = append(data, &db)
+	}
+	return data, nil
+}
+
+// XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+// ======================================Token=============================================
+func (e *Connection) GenerateToken(request entity.LoginDetails) (string, error) {
+	// check if email exists and password is correct
+	record, err := CollectionLoginDetails.Find(ctx, bson.D{primitive.E{Key: "mail_id", Value: request.MailId}})
+	if err != nil {
+		return "", err
+	}
+	convertData, err := convertDbResultIntoLoginStruct(record)
+	if err != nil {
+		return "", err
+	}
+	if convertData[0].Password == request.Password {
+		tokenString, err := auth.GenerateJWT(request.MailId, request.Password)
+		if err != nil {
+			return "", err
+		}
+		return tokenString, err
+	} else {
+		return "", errors.New("Invalid Credentials")
+	}
+
+}
