@@ -13,6 +13,7 @@ import (
 )
 
 var ser = service.Connection{}
+var finalResponse entity.Response
 
 func init() {
 	ser.Server = "mongodb://localhost:27017"
@@ -48,7 +49,7 @@ func saveUserDetails(w http.ResponseWriter, r *http.Request) {
 	if result, err := ser.SaveUserDetails(dataBody); err != nil {
 		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
 	} else {
-		respondWithJson(w, http.StatusBadRequest, result)
+		respondWithJson(w, http.StatusAccepted, result, "")
 	}
 }
 
@@ -69,7 +70,7 @@ func searchUsersDetailsById(w http.ResponseWriter, r *http.Request) {
 	if result, err := ser.SearchUsersDetailsById(id); err != nil {
 		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
 	} else {
-		respondWithJson(w, http.StatusBadRequest, result)
+		respondWithJson(w, http.StatusAccepted, result, "")
 	}
 }
 
@@ -99,7 +100,7 @@ func updateUserDetailsById(w http.ResponseWriter, r *http.Request) {
 	if result, err := ser.UpdateUserDetailsById(dataBody, id); err != nil {
 		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
 	} else {
-		respondWithJson(w, http.StatusBadRequest, result)
+		respondWithJson(w, http.StatusAccepted, result, "")
 	}
 }
 
@@ -124,7 +125,7 @@ func deleteUserDetailsById(w http.ResponseWriter, r *http.Request) {
 	if result, err := ser.DeleteUserDetailsById(id); err != nil {
 		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
 	} else {
-		respondWithJson(w, http.StatusBadRequest, result)
+		respondWithJson(w, http.StatusAccepted, result, "")
 	}
 }
 
@@ -155,7 +156,7 @@ func saveDonorDetails(w http.ResponseWriter, r *http.Request) {
 	if result, err := ser.SaveDonorDetails(dataBody); err != nil {
 		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
 	} else {
-		respondWithJson(w, http.StatusBadRequest, result)
+		respondWithJson(w, http.StatusAccepted, result, "")
 	}
 }
 
@@ -176,7 +177,7 @@ func searchDonorDetailsById(w http.ResponseWriter, r *http.Request) {
 	if result, err := ser.SearchDonorDetailsById(id); err != nil {
 		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
 	} else {
-		respondWithJson(w, http.StatusBadRequest, result)
+		respondWithJson(w, http.StatusAccepted, result, "")
 	}
 }
 
@@ -206,7 +207,7 @@ func updateDonorDetailsById(w http.ResponseWriter, r *http.Request) {
 	if result, err := ser.UpdateDonorDetailsById(dataBody, id); err != nil {
 		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
 	} else {
-		respondWithJson(w, http.StatusBadRequest, result)
+		respondWithJson(w, http.StatusAccepted, result, "")
 	}
 }
 
@@ -230,7 +231,7 @@ func deleteDonorDetailsById(w http.ResponseWriter, r *http.Request) {
 	if result, err := ser.DeleteDonorDetailsById(id); err != nil {
 		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
 	} else {
-		respondWithJson(w, http.StatusBadRequest, result)
+		respondWithJson(w, http.StatusAccepted, result, "")
 	}
 }
 
@@ -261,7 +262,7 @@ func applyBloodPatientDetails(w http.ResponseWriter, r *http.Request) {
 	if result, err := ser.ApplyBloodPatientDetails(dataBody); err != nil {
 		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
 	} else {
-		respondWithJson(w, http.StatusBadRequest, result)
+		respondWithJson(w, http.StatusAccepted, result, "")
 	}
 }
 
@@ -288,7 +289,7 @@ func givenBloodPatientDetailsById(w http.ResponseWriter, r *http.Request) {
 	if result, err := ser.GivenBloodPatientDetailsById(id); err != nil {
 		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
 	} else {
-		respondWithJson(w, http.StatusBadRequest, result)
+		respondWithJson(w, http.StatusAccepted, result, "")
 	}
 }
 
@@ -303,7 +304,7 @@ func searchAllPendingBloodPatientDetails(w http.ResponseWriter, r *http.Request)
 	if result, err := ser.SearchAllPendingBloodPatientDetails(); err != nil {
 		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
 	} else {
-		respondWithJson(w, http.StatusBadRequest, result)
+		respondWithJson(w, http.StatusAccepted, result, "")
 	}
 }
 
@@ -327,7 +328,7 @@ func deletePendingBloodPatientDetails(w http.ResponseWriter, r *http.Request) {
 	if result, err := ser.DeletePendingBloodPatientDetails(id); err != nil {
 		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
 	} else {
-		respondWithJson(w, http.StatusBadRequest, result)
+		respondWithJson(w, http.StatusAccepted, result, "")
 	}
 }
 
@@ -347,7 +348,7 @@ func searchFilterBloodDetails(w http.ResponseWriter, r *http.Request) {
 	if result, err := ser.SearchFilterBloodDetails(bloodDetailsRequest); err != nil {
 		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
 	} else {
-		respondWithJson(w, http.StatusBadRequest, result)
+		respondWithJson(w, http.StatusAccepted, result, "")
 	}
 }
 
@@ -367,16 +368,23 @@ func generateToken(w http.ResponseWriter, r *http.Request) {
 	if result, err := ser.GenerateToken(loginDetails); err != nil {
 		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
 	} else {
-		respondWithJson(w, http.StatusBadRequest, result)
+		respondWithJson(w, http.StatusAccepted, result, "")
 	}
 }
 
 func respondWithError(w http.ResponseWriter, code int, msg string) {
-	respondWithJson(w, code, map[string]string{"error": msg})
+	respondWithJson(w, code, map[string]string{"error": msg}, "error")
 }
 
-func respondWithJson(w http.ResponseWriter, code int, payload interface{}) {
-	response, _ := json.Marshal(payload)
+func respondWithJson(w http.ResponseWriter, code int, payload interface{}, err string) {
+	if err == "error" {
+		finalResponse.Success = "false"
+	} else {
+		finalResponse.Success = "true"
+	}
+	finalResponse.SucessCode = fmt.Sprintf("%v", code)
+	finalResponse.Response = payload
+	response, _ := json.Marshal(finalResponse)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	w.Write(response)

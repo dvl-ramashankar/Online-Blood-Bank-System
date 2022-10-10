@@ -7,10 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"strconv"
-	"strings"
 	"time"
 
+	"github.com/unidoc/unipdf/v3/common/license"
+	"github.com/unidoc/unipdf/v3/creator"
+	"github.com/unidoc/unipdf/v3/model"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -26,6 +29,8 @@ type Connection struct {
 	Collection4 string
 	Collection5 string
 }
+
+const dir = "download/"
 
 var CollectionUserDetails *mongo.Collection
 var CollectionDonorDetails *mongo.Collection
@@ -45,6 +50,12 @@ func (e *Connection) Connect() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	err = license.SetMeteredKey("301d8f2e0d0c5d045070142329639ac70eda204a4ad3039482d1bd6d023a2f9a")
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	CollectionUserDetails = client.Database(e.Database).Collection(e.Collection1)
 	CollectionDonorDetails = client.Database(e.Database).Collection(e.Collection2)
 	CollectionBloodDetails = client.Database(e.Database).Collection(e.Collection3)
@@ -251,6 +262,12 @@ func (e *Connection) SaveDonorDetails(reqBody entity.DonorDetailsRequest) (strin
 		return "", err
 	}
 	fmt.Println(str)
+	certificate, err := CertificatesOfBloodDonated(reqBody)
+	if err != nil {
+		log.Println(err)
+		return "", err
+	}
+	fmt.Println(certificate)
 	return "Donor Details Saved Successfully", nil
 }
 
@@ -421,7 +438,7 @@ func saveBloodQuantityInBloodDetails(reqBody entity.DonorDetailsRequest) (string
 	if err != nil {
 		return "", err
 	}
-	unitInt, err := convertUnitsStringIntoInt(reqBody.Units)
+	unitInt, err := strconv.Atoi(reqBody.Units)
 	if err != nil {
 		fmt.Println(err)
 		return "", nil
@@ -483,18 +500,8 @@ func convertDbResultIntoBloodStruct(fetchDataCursor *mongo.Cursor) ([]*entity.Bl
 	return finaldata, nil
 }
 
-func convertUnitsStringIntoInt(units string) (int, error) {
-	unitReplace := strings.ReplaceAll(units, "ml", "")
-	unitInt, err := strconv.Atoi(unitReplace)
-	if err != nil {
-		fmt.Println(err)
-		return 0, nil
-	}
-	return unitInt, nil
-}
-
 func deductOrAddBloodUnitsFromBloodDetails(bloodGroup, units, location, methodCall string, bloodDate time.Time) (string, error) {
-	unitInt, err := convertUnitsStringIntoInt(units)
+	unitInt, err := strconv.Atoi(units)
 	if err != nil {
 		fmt.Println(err)
 		return "", nil
@@ -725,16 +732,29 @@ func convertDbResultIntoLoginStruct(fetchDataCursor *mongo.Cursor) ([]*entity.Lo
 // XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 // ======================================Token=============================================
 func (e *Connection) GenerateToken(request entity.LoginDetails) (string, error) {
+
+	filter := bson.D{
+		{"$and",
+			bson.A{
+				bson.D{{"mail_id", request.MailId}},
+				bson.D{{"active", true}},
+				bson.D{{"password", request.Password}},
+			},
+		},
+	}
+
 	// check if email exists and password is correct
-	record, err := CollectionLoginDetails.Find(ctx, bson.D{primitive.E{Key: "mail_id", Value: request.MailId}})
+	record, err := CollectionLoginDetails.Find(ctx, filter)
 	if err != nil {
 		return "", err
 	}
+
 	convertData, err := convertDbResultIntoLoginStruct(record)
 	if err != nil {
 		return "", err
 	}
-	if convertData[0].Password == request.Password {
+
+	if len(convertData) != 0 {
 		tokenString, err := auth.GenerateJWT(request.MailId, request.Password)
 		if err != nil {
 			return "", err
@@ -743,5 +763,214 @@ func (e *Connection) GenerateToken(request entity.LoginDetails) (string, error) 
 	} else {
 		return "", errors.New("Invalid Credentials")
 	}
+}
 
+//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+//================================Certificates===========================================
+
+func CertificatesOfBloodDonated(donorDetails entity.DonorDetailsRequest) (string, error) {
+	file := "BloodDonatedCertificate" + donorDetails.Name + fmt.Sprintf("%v", time.Now().Format("3_4_5_pm"))
+	c := creator.New()
+	c.SetPageMargins(20, 20, 20, 20)
+
+	font, err := model.NewStandard14Font(model.HelveticaName)
+	if err != nil {
+		return "", err
+	}
+
+	fontBold, err := model.NewStandard14Font(model.HelveticaBoldName)
+	if err != nil {
+		return "", err
+	}
+
+	// Generate basic usage chapter.
+	if err := basicUsage(c, font, fontBold, donorDetails); err != nil {
+		return "", err
+	}
+	err = os.MkdirAll(dir, os.ModePerm)
+	if err != nil {
+		return "", err
+	}
+	err = c.WriteToFile(dir + file + ".pdf")
+	if err != nil {
+		return "", err
+	}
+	return "Certificate Download Successfully : " + dir + file + ".pdf", nil
+}
+
+func basicUsage(c *creator.Creator, font, fontBold *model.PdfFont, donorDetails entity.DonorDetailsRequest) error {
+	// Create chapter.
+	ch := c.NewChapter("Blood Donated Certificate")
+	ch.SetMargins(0, 0, 10, 0)
+	ch.GetHeading().SetFont(font)
+	ch.GetHeading().SetFontSize(20)
+	ch.GetHeading().SetColor(creator.ColorRGBFrom8bit(72, 86, 95))
+
+	contentAlignH(c, ch, font, fontBold, donorDetails)
+
+	// Draw chapter.
+	if err := c.Draw(ch); err != nil {
+		return err
+	}
+	return nil
+}
+
+func contentAlignH(c *creator.Creator, ch *creator.Chapter, font, fontBold *model.PdfFont, donorDetails entity.DonorDetailsRequest) {
+
+	normalFontColorGreen := creator.ColorRGBFrom8bit(4, 79, 3)
+	normalFontSize := 10.0
+	x := c.NewParagraph("Name" + " :     " + donorDetails.Name)
+	x.SetFont(font)
+	x.SetFontSize(normalFontSize)
+	x.SetColor(normalFontColorGreen)
+	x.SetMargins(0, 0, 10, 0)
+	ch.Add(x)
+	y := c.NewParagraph("Age" + " :     " + fmt.Sprintf("%v", donorDetails.Age))
+	y.SetFont(font)
+	y.SetFontSize(normalFontSize)
+	y.SetColor(normalFontColorGreen)
+	y.SetMargins(0, 0, 10, 0)
+	ch.Add(y)
+	z := c.NewParagraph("Bcc" + " :     " + donorDetails.DOB)
+	z.SetFont(font)
+	z.SetFontSize(normalFontSize)
+	z.SetColor(normalFontColorGreen)
+	z.SetMargins(0, 0, 10, 0)
+	ch.Add(z)
+	b := c.NewParagraph("BloodGroup" + ":     " + donorDetails.BloodGroup)
+	b.SetFont(font)
+	b.SetFontSize(normalFontSize)
+	b.SetColor(normalFontColorGreen)
+	b.SetMargins(0, 0, 10, 0)
+	ch.Add(b)
+	a := c.NewParagraph("Units" + ":     " + donorDetails.Units)
+	a.SetFont(font)
+	a.SetFontSize(normalFontSize)
+	a.SetColor(normalFontColorGreen)
+	a.SetMargins(0, 0, 10, 0)
+	ch.Add(a)
+	d := c.NewParagraph("DepositDate" + ":     " + donorDetails.DepositDate)
+	d.SetFont(font)
+	d.SetFontSize(normalFontSize)
+	d.SetColor(normalFontColorGreen)
+	d.SetMargins(0, 0, 10, 0)
+	ch.Add(d)
+	e := c.NewParagraph("Location" + ":     " + donorDetails.Location)
+	e.SetFont(font)
+	e.SetFontSize(normalFontSize)
+	e.SetColor(normalFontColorGreen)
+	e.SetMargins(0, 0, 10, 0)
+	ch.Add(e)
+	f := c.NewParagraph("AdharCard" + ":     " + donorDetails.AdharCard)
+	f.SetFont(font)
+	f.SetFontSize(normalFontSize)
+	f.SetColor(normalFontColorGreen)
+	f.SetMargins(0, 0, 10, 0)
+	ch.Add(f)
+	g := c.NewParagraph("EmailId" + ":     " + donorDetails.MailId)
+	g.SetFont(font)
+	g.SetFontSize(normalFontSize)
+	g.SetColor(normalFontColorGreen)
+	g.SetMargins(0, 0, 10, 0)
+	ch.Add(g)
+}
+
+func CertificatesOfBloodRecieved(patientDetails entity.PatientDetailsRequest) (string, error) {
+	file := "BloodRecievedCertificate" + patientDetails.Name + fmt.Sprintf("%v", time.Now().Format("3_4_5_pm"))
+	c := creator.New()
+	c.SetPageMargins(20, 20, 20, 20)
+
+	font, err := model.NewStandard14Font(model.HelveticaName)
+	if err != nil {
+		return "", err
+	}
+
+	fontBold, err := model.NewStandard14Font(model.HelveticaBoldName)
+	if err != nil {
+		return "", err
+	}
+
+	// Generate basic usage chapter.
+	ch := c.NewChapter("Blood Donated Certificate")
+	ch.SetMargins(0, 0, 10, 0)
+	ch.GetHeading().SetFont(font)
+	ch.GetHeading().SetFontSize(20)
+	ch.GetHeading().SetColor(creator.ColorRGBFrom8bit(72, 86, 95))
+
+	contentAlignHBloodRecieved(c, ch, font, fontBold, patientDetails)
+
+	// Draw chapter.
+	if err := c.Draw(ch); err != nil {
+		return "", err
+	}
+
+	err = os.MkdirAll(dir, os.ModePerm)
+	if err != nil {
+		return "", err
+	}
+	err = c.WriteToFile(dir + file + ".pdf")
+	if err != nil {
+		return "", err
+	}
+	return "Certificate Download Successfully : " + dir + file + ".pdf", nil
+}
+
+func contentAlignHBloodRecieved(c *creator.Creator, ch *creator.Chapter, font, fontBold *model.PdfFont, patientDetails entity.PatientDetailsRequest) {
+
+	normalFontColorGreen := creator.ColorRGBFrom8bit(4, 79, 3)
+	normalFontSize := 10.0
+	x := c.NewParagraph("Name" + " :     " + patientDetails.Name)
+	x.SetFont(font)
+	x.SetFontSize(normalFontSize)
+	x.SetColor(normalFontColorGreen)
+	x.SetMargins(0, 0, 10, 0)
+	ch.Add(x)
+	y := c.NewParagraph("Age" + " :     " + fmt.Sprintf("%v", patientDetails.Age))
+	y.SetFont(font)
+	y.SetFontSize(normalFontSize)
+	y.SetColor(normalFontColorGreen)
+	y.SetMargins(0, 0, 10, 0)
+	ch.Add(y)
+	z := c.NewParagraph("DOB" + " :     " + patientDetails.DOB)
+	z.SetFont(font)
+	z.SetFontSize(normalFontSize)
+	z.SetColor(normalFontColorGreen)
+	z.SetMargins(0, 0, 10, 0)
+	ch.Add(z)
+	b := c.NewParagraph("BloodGroup" + ":     " + patientDetails.BloodGroup)
+	b.SetFont(font)
+	b.SetFontSize(normalFontSize)
+	b.SetColor(normalFontColorGreen)
+	b.SetMargins(0, 0, 10, 0)
+	ch.Add(b)
+	// a := c.NewParagraph("Recieved Blood in ml" + ":     " + patientDetails.Units)
+	// a.SetFont(font)
+	// a.SetFontSize(normalFontSize)
+	// a.SetColor(normalFontColorGreen)
+	// a.SetMargins(0, 0, 10, 0)
+	// ch.Add(a)
+	// d := c.NewParagraph("Blood Given Date" + ":     " + patientDetails.Give)
+	// d.SetFont(font)
+	// d.SetFontSize(normalFontSize)
+	// d.SetColor(normalFontColorGreen)
+	// d.SetMargins(0, 0, 10, 0)
+	// ch.Add(d)
+	e := c.NewParagraph("Location" + ":     " + patientDetails.Location)
+	e.SetFont(font)
+	e.SetFontSize(normalFontSize)
+	e.SetColor(normalFontColorGreen)
+	e.SetMargins(0, 0, 10, 0)
+	ch.Add(e)
+	f := c.NewParagraph("AdharCard" + ":     " + patientDetails.AdharCard)
+	f.SetFont(font)
+	f.SetFontSize(normalFontSize)
+	f.SetColor(normalFontColorGreen)
+	f.SetMargins(0, 0, 10, 0)
+	ch.Add(f)
+	g := c.NewParagraph("EmailId" + ":     " + patientDetails.MailId)
+	g.SetFont(font)
+	g.SetFontSize(normalFontSize)
+	g.SetColor(normalFontColorGreen)
+	g.SetMargins(0, 0, 10, 0)
+	ch.Add(g)
 }

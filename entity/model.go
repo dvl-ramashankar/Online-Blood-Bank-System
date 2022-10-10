@@ -112,3 +112,9 @@ type PatientDetailsRequest struct {
 	MailId     string `bson:"mail_id,omitempty" json:"mail_id,omitempty"`
 	Password   string `bson:"password,omitempty" json:"password,omitempty"`
 }
+
+type Response struct {
+	Success    string      `json:"success,omitempty"`
+	SucessCode string      `json:"successCode,omitempty"`
+	Response   interface{} `json:"response,omitempty"`
+}
