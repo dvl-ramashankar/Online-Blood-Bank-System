@@ -33,12 +33,7 @@ func saveUserDetails(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusBadRequest, "Invalid Method")
 		return
 	}
-	token := r.Header.Get("tokenid")
-	err := validateToken(token)
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("%v", err))
-		return
-	}
+
 	var dataBody entity.UserDetailsRequest
 	if err := json.NewDecoder(r.Body).Decode(&dataBody); err != nil {
 		respondWithError(w, http.StatusBadRequest, "Invalid Request")
