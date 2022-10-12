@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/unidoc/unipdf/v3/common/license"
@@ -64,27 +65,37 @@ func (e *Connection) Connect() {
 }
 
 // ===================================userDetails============================================
-func (e *Connection) SaveUserDetails(reqBody entity.UserDetailsRequest) (string, error) {
+func (e *Connection) SaveUserDetails(reqBody entity.UserDetailsRequest) ([]*entity.UserDetails, error) {
+	var data []*entity.UserDetails
 	bool, err := validateByNameAndDob(reqBody)
 	if err != nil {
-		return "", err
+		return data, err
 	}
 	if !bool {
-		return "", errors.New("User already present")
+		return data, errors.New("User already present")
 	}
 	saveIntoLoginTable(reqBody.MailId, reqBody.Password)
 	saveData, err := SetValueInUserModel(reqBody)
 	if err != nil {
 		log.Println(err)
-		return "", err
+		return data, err
 	}
-	data, err := CollectionUserDetails.InsertOne(ctx, saveData)
+	finalData, err := CollectionUserDetails.InsertOne(ctx, saveData)
 	if err != nil {
 		log.Println(err)
-		return "", errors.New("Unable to store data")
+		return data, errors.New("Unable to store data")
 	}
-	d := data.InsertedID
-	return "User Saved Successfully : " + fmt.Sprintf("%v", d), nil
+	result, err := CollectionUserDetails.Find(ctx, bson.D{primitive.E{Key: "_id", Value: finalData.InsertedID}})
+	if err != nil {
+		log.Println(err)
+		return data, err
+	}
+	data, err = convertDbResultIntoUserStruct(result)
+	if err != nil {
+		log.Println(err)
+		return data, err
+	}
+	return data, nil
 }
 
 func (e *Connection) SearchUsersDetailsById(idStr string) ([]*entity.UserDetails, error) {
@@ -244,31 +255,41 @@ func validateByNameAndDob(reqbody entity.UserDetailsRequest) (bool, error) {
 
 // XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 // ==========================================Donor detail======================================
-func (e *Connection) SaveDonorDetails(reqBody entity.DonorDetailsRequest) (string, error) {
-	saveIntoLoginTable(reqBody.MailId, reqBody.Password)
+func (e *Connection) SaveDonorDetails(reqBody entity.DonorDetailsRequest) ([]*entity.DonorDetails, error) {
+	var result []*entity.DonorDetails
+
 	saveData, err := SetValueInModel(reqBody)
 	if err != nil {
-		return "", errors.New("Unable to parse date")
+		return result, errors.New("Unable to parse date")
 	}
-	data, err := CollectionDonorDetails.InsertOne(ctx, saveData)
+	saveDataDb, err := CollectionDonorDetails.InsertOne(ctx, saveData)
 	if err != nil {
 		log.Println(err)
-		return "", errors.New("Unable to store data")
+		return result, errors.New("Unable to store data")
 	}
-	fmt.Println(data)
 	str, err := saveBloodQuantityInBloodDetails(reqBody)
 	if err != nil {
 		log.Println(err)
-		return "", err
+		return result, err
 	}
 	fmt.Println(str)
+	data, err := CollectionDonorDetails.Find(ctx, bson.D{primitive.E{Key: "_id", Value: saveDataDb.InsertedID}})
+	if err != nil {
+		log.Println(err)
+		return result, err
+	}
+	result, err = convertDbResultIntoDonorStruct(data)
+	if err != nil {
+		log.Println(err)
+		return result, err
+	}
 	certificate, err := CertificatesOfBloodDonated(reqBody)
 	if err != nil {
 		log.Println(err)
-		return "", err
+		return result, err
 	}
 	fmt.Println(certificate)
-	return "Donor Details Saved Successfully", nil
+	return result, nil
 }
 
 func (e *Connection) SearchDonorDetailsById(idStr string) ([]*entity.DonorDetails, error) {
@@ -288,6 +309,9 @@ func (e *Connection) SearchDonorDetailsById(idStr string) ([]*entity.DonorDetail
 	if err != nil {
 		log.Println(err)
 		return finalData, err
+	}
+	if len(finalData) == 0 {
+		return finalData, errors.New("Either document is not present in db or it is deactivated")
 	}
 	return finalData, nil
 }
@@ -408,7 +432,7 @@ func (e *Connection) SearchFilterBloodDetails(search entity.BloodDetailsRequest)
 	filter := bson.D{}
 
 	if search.BloodGroup != "" {
-		filter = append(filter, primitive.E{Key: "blood_group", Value: bson.M{"$regex": search.BloodGroup}})
+		filter = append(filter, primitive.E{Key: "blood_group", Value: search.BloodGroup})
 	}
 	if search.Location != "" {
 		filter = append(filter, primitive.E{Key: "location", Value: bson.M{"$regex": search.Location}})
@@ -446,6 +470,7 @@ func saveBloodQuantityInBloodDetails(reqBody entity.DonorDetailsRequest) (string
 	filter := bson.D{
 		{"$and",
 			bson.A{
+				bson.D{primitive.E{Key: "blood_group", Value: reqBody.BloodGroup}},
 				bson.D{primitive.E{Key: "location", Value: reqBody.Location}},
 				bson.D{primitive.E{Key: "deposit_date", Value: depositDate}},
 			},
@@ -523,7 +548,7 @@ func deductOrAddBloodUnitsFromBloodDetails(bloodGroup, units, location, methodCa
 		return "", nil
 	}
 	if finalData == nil {
-		return "", errors.New("Data not present in Blood details according to given location and desposited date")
+		return "", errors.New("Data not present in Blood details according to given bloodGroup, location and desposited date")
 	}
 	if methodCall == "Deduct" {
 		unit := finalData[0].Units
@@ -548,31 +573,41 @@ func deductOrAddBloodUnitsFromBloodDetails(bloodGroup, units, location, methodCa
 
 //==========================================Patient Details=====================================
 
-func (e *Connection) ApplyBloodPatientDetails(reqBody entity.PatientDetailsRequest) (string, error) {
-	saveIntoLoginTable(reqBody.MailId, reqBody.Password)
+func (e *Connection) ApplyBloodPatientDetails(reqBody entity.PatientDetailsRequest) ([]*entity.PatientDetails, error) {
+	var result []*entity.PatientDetails
 	saveData, err := SetValueInPatientModel(reqBody)
 	if err != nil {
 		log.Println(err)
-		return "", err
+		return result, err
 	}
 	bloodDate, err := convertDate(reqBody.BloodDate)
 	if err != nil {
 		log.Println(err)
-		return "", err
+		return result, err
 	}
 
 	deduct, err := deductOrAddBloodUnitsFromBloodDetails(reqBody.BloodGroup, reqBody.ApplyUnits, reqBody.Location, "Deduct", bloodDate)
 	if err != nil {
-		return "", err
+		return result, err
 	}
 	fmt.Println(deduct)
 	data, err := CollectionPatientDetails.InsertOne(ctx, saveData)
 	if err != nil {
 		log.Println(err)
-		return "", errors.New("Unable to store data")
+		return result, errors.New("Unable to store data")
 	}
-	fmt.Println(data)
-	return "User Saved Successfully", nil
+
+	finalData, err := CollectionPatientDetails.Find(ctx, bson.D{primitive.E{Key: "_id", Value: data.InsertedID}})
+	if err != nil {
+		log.Println(err)
+		return result, err
+	}
+	result, err = convertDbResultIntoPatientStruct(finalData)
+	if err != nil {
+		log.Println(err)
+		return result, err
+	}
+	return result, nil
 }
 
 func (e *Connection) SearchAllPendingBloodPatientDetails() ([]*entity.PatientDetails, error) {
@@ -591,11 +626,12 @@ func (e *Connection) SearchAllPendingBloodPatientDetails() ([]*entity.PatientDet
 	return finalData, nil
 }
 
-func (e *Connection) GivenBloodPatientDetailsById(idStr string) (bson.M, error) {
+func (e *Connection) GivenBloodPatientDetailsById(idStr string) ([]*entity.PatientDetails, error) {
+	var result []*entity.PatientDetails
 	var updatedDocument bson.M
 	id, err := primitive.ObjectIDFromHex(idStr)
 	if err != nil {
-		return updatedDocument, err
+		return result, err
 	}
 	filter := bson.D{
 		{"$and",
@@ -614,14 +650,29 @@ func (e *Connection) GivenBloodPatientDetailsById(idStr string) (bson.M, error) 
 
 	r := CollectionPatientDetails.FindOneAndUpdate(ctx, filter, update).Decode(&updatedDocument)
 	if r != nil {
-		return updatedDocument, r
-	}
-	fmt.Println(updatedDocument)
-	if updatedDocument == nil {
-		return updatedDocument, errors.New("Data not present in db given by Id or it is deactivated")
+		return result, r
 	}
 
-	return updatedDocument, nil
+	if updatedDocument == nil {
+		return result, errors.New("Data not present in db given by Id or it is deactivated")
+	}
+	finalData, err := CollectionPatientDetails.Find(ctx, bson.D{primitive.E{Key: "_id", Value: id}})
+	if err != nil {
+		log.Println(err)
+		return result, err
+	}
+	result, err = convertDbResultIntoPatientStruct(finalData)
+	if err != nil {
+		log.Println(err)
+		return result, err
+	}
+	certificate, err := CertificatesOfBloodRecieved(result)
+	if err != nil {
+		log.Println(err)
+		return result, err
+	}
+	fmt.Println(certificate)
+	return result, nil
 }
 
 func (e *Connection) DeletePendingBloodPatientDetails(idStr string) (string, error) {
@@ -672,6 +723,8 @@ func SetValueInPatientModel(req entity.PatientDetailsRequest) (entity.PatientDet
 	data.ApplyUnits = req.ApplyUnits
 	data.ApplyDate = time.Now()
 	data.BloodDate = bloodDate
+	data.MailId = req.MailId
+	data.Password = req.Password
 	return data, nil
 }
 
@@ -801,7 +854,7 @@ func CertificatesOfBloodDonated(donorDetails entity.DonorDetailsRequest) (string
 func basicUsage(c *creator.Creator, font, fontBold *model.PdfFont, donorDetails entity.DonorDetailsRequest) error {
 	// Create chapter.
 	ch := c.NewChapter("Blood Donated Certificate")
-	ch.SetMargins(0, 0, 10, 0)
+	ch.SetMargins(100, 0, 10, 0)
 	ch.GetHeading().SetFont(font)
 	ch.GetHeading().SetFontSize(20)
 	ch.GetHeading().SetColor(creator.ColorRGBFrom8bit(72, 86, 95))
@@ -819,30 +872,27 @@ func contentAlignH(c *creator.Creator, ch *creator.Chapter, font, fontBold *mode
 
 	normalFontColorGreen := creator.ColorRGBFrom8bit(4, 79, 3)
 	normalFontSize := 10.0
-	x := c.NewParagraph("Name" + " :     " + donorDetails.Name)
+	str := "We are extremely thankful to " + donorDetails.Name +
+		" , resident of " + donorDetails.Location + " , for his/her valuable cooperation at the Blood Donation Camp on World Blood Donation Day " + donorDetails.DepositDate + "."
+	x := c.NewParagraph(str)
 	x.SetFont(font)
-	x.SetFontSize(normalFontSize)
+	x.SetFontSize(15.0)
 	x.SetColor(normalFontColorGreen)
 	x.SetMargins(0, 0, 10, 0)
 	ch.Add(x)
-	y := c.NewParagraph("Age" + " :     " + fmt.Sprintf("%v", donorDetails.Age))
-	y.SetFont(font)
-	y.SetFontSize(normalFontSize)
-	y.SetColor(normalFontColorGreen)
-	y.SetMargins(0, 0, 10, 0)
-	ch.Add(y)
-	z := c.NewParagraph("Bcc" + " :     " + donorDetails.DOB)
-	z.SetFont(font)
-	z.SetFontSize(normalFontSize)
-	z.SetColor(normalFontColorGreen)
-	z.SetMargins(0, 0, 10, 0)
-	ch.Add(z)
 	b := c.NewParagraph("BloodGroup" + ":     " + donorDetails.BloodGroup)
 	b.SetFont(font)
 	b.SetFontSize(normalFontSize)
 	b.SetColor(normalFontColorGreen)
 	b.SetMargins(0, 0, 10, 0)
+	b.SetLineHeight(2)
 	ch.Add(b)
+	g := c.NewParagraph("EmailId" + ":     " + donorDetails.MailId)
+	g.SetFont(font)
+	g.SetFontSize(normalFontSize)
+	g.SetColor(normalFontColorGreen)
+	g.SetMargins(0, 0, 10, 0)
+	ch.Add(g)
 	a := c.NewParagraph("Units" + ":     " + donorDetails.Units)
 	a.SetFont(font)
 	a.SetFontSize(normalFontSize)
@@ -867,16 +917,16 @@ func contentAlignH(c *creator.Creator, ch *creator.Chapter, font, fontBold *mode
 	f.SetColor(normalFontColorGreen)
 	f.SetMargins(0, 0, 10, 0)
 	ch.Add(f)
-	g := c.NewParagraph("EmailId" + ":     " + donorDetails.MailId)
-	g.SetFont(font)
-	g.SetFontSize(normalFontSize)
-	g.SetColor(normalFontColorGreen)
-	g.SetMargins(0, 0, 10, 0)
-	ch.Add(g)
+	z := c.NewParagraph("DOB" + " :     " + donorDetails.DOB)
+	z.SetFont(font)
+	z.SetFontSize(normalFontSize)
+	z.SetColor(normalFontColorGreen)
+	z.SetMargins(0, 0, 10, 0)
+	ch.Add(z)
 }
 
-func CertificatesOfBloodRecieved(patientDetails entity.PatientDetailsRequest) (string, error) {
-	file := "BloodRecievedCertificate" + patientDetails.Name + fmt.Sprintf("%v", time.Now().Format("3_4_5_pm"))
+func CertificatesOfBloodRecieved(patientDetails []*entity.PatientDetails) (string, error) {
+	file := "BloodRecievedCertificate" + patientDetails[0].Name + fmt.Sprintf("%v", time.Now().Format("3_4_5_pm"))
 	c := creator.New()
 	c.SetPageMargins(20, 20, 20, 20)
 
@@ -891,7 +941,7 @@ func CertificatesOfBloodRecieved(patientDetails entity.PatientDetailsRequest) (s
 	}
 
 	// Generate basic usage chapter.
-	ch := c.NewChapter("Blood Donated Certificate")
+	ch := c.NewChapter("Blood Reciept")
 	ch.SetMargins(0, 0, 10, 0)
 	ch.GetHeading().SetFont(font)
 	ch.GetHeading().SetFontSize(20)
@@ -915,59 +965,47 @@ func CertificatesOfBloodRecieved(patientDetails entity.PatientDetailsRequest) (s
 	return "Certificate Download Successfully : " + dir + file + ".pdf", nil
 }
 
-func contentAlignHBloodRecieved(c *creator.Creator, ch *creator.Chapter, font, fontBold *model.PdfFont, patientDetails entity.PatientDetailsRequest) {
+func contentAlignHBloodRecieved(c *creator.Creator, ch *creator.Chapter, font, fontBold *model.PdfFont, patientDetails []*entity.PatientDetails) {
 
 	normalFontColorGreen := creator.ColorRGBFrom8bit(4, 79, 3)
 	normalFontSize := 10.0
-	x := c.NewParagraph("Name" + " :     " + patientDetails.Name)
+	x := c.NewParagraph("Name" + " :     " + patientDetails[0].Name)
 	x.SetFont(font)
 	x.SetFontSize(normalFontSize)
 	x.SetColor(normalFontColorGreen)
 	x.SetMargins(0, 0, 10, 0)
 	ch.Add(x)
-	y := c.NewParagraph("Age" + " :     " + fmt.Sprintf("%v", patientDetails.Age))
+	y := c.NewParagraph("Age" + " :     " + fmt.Sprintf("%v", patientDetails[0].Age))
 	y.SetFont(font)
 	y.SetFontSize(normalFontSize)
 	y.SetColor(normalFontColorGreen)
 	y.SetMargins(0, 0, 10, 0)
 	ch.Add(y)
-	z := c.NewParagraph("DOB" + " :     " + patientDetails.DOB)
-	z.SetFont(font)
-	z.SetFontSize(normalFontSize)
-	z.SetColor(normalFontColorGreen)
-	z.SetMargins(0, 0, 10, 0)
-	ch.Add(z)
-	b := c.NewParagraph("BloodGroup" + ":     " + patientDetails.BloodGroup)
+	b := c.NewParagraph("BloodGroup" + ":     " + patientDetails[0].BloodGroup)
 	b.SetFont(font)
 	b.SetFontSize(normalFontSize)
 	b.SetColor(normalFontColorGreen)
 	b.SetMargins(0, 0, 10, 0)
 	ch.Add(b)
-	// a := c.NewParagraph("Recieved Blood in ml" + ":     " + patientDetails.Units)
-	// a.SetFont(font)
-	// a.SetFontSize(normalFontSize)
-	// a.SetColor(normalFontColorGreen)
-	// a.SetMargins(0, 0, 10, 0)
-	// ch.Add(a)
-	// d := c.NewParagraph("Blood Given Date" + ":     " + patientDetails.Give)
-	// d.SetFont(font)
-	// d.SetFontSize(normalFontSize)
-	// d.SetColor(normalFontColorGreen)
-	// d.SetMargins(0, 0, 10, 0)
-	// ch.Add(d)
-	e := c.NewParagraph("Location" + ":     " + patientDetails.Location)
+	d := c.NewParagraph("Blood Given Date" + ":     " + strings.ReplaceAll(patientDetails[0].GivenDate.String(), "+0000 UTC", ""))
+	d.SetFont(font)
+	d.SetFontSize(normalFontSize)
+	d.SetColor(normalFontColorGreen)
+	d.SetMargins(0, 0, 10, 0)
+	ch.Add(d)
+	e := c.NewParagraph("Location" + ":     " + patientDetails[0].Location)
 	e.SetFont(font)
 	e.SetFontSize(normalFontSize)
 	e.SetColor(normalFontColorGreen)
 	e.SetMargins(0, 0, 10, 0)
 	ch.Add(e)
-	f := c.NewParagraph("AdharCard" + ":     " + patientDetails.AdharCard)
+	f := c.NewParagraph("AdharCard" + ":     " + patientDetails[0].AdharCard)
 	f.SetFont(font)
 	f.SetFontSize(normalFontSize)
 	f.SetColor(normalFontColorGreen)
 	f.SetMargins(0, 0, 10, 0)
 	ch.Add(f)
-	g := c.NewParagraph("EmailId" + ":     " + patientDetails.MailId)
+	g := c.NewParagraph("EmailId" + ":     " + patientDetails[0].MailId)
 	g.SetFont(font)
 	g.SetFontSize(normalFontSize)
 	g.SetColor(normalFontColorGreen)
